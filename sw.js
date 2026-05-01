@@ -1,4 +1,4 @@
-const CACHE = 'r90d-v4';
+const CACHE = 'r90d-v5';
 const SHELL = [
   './',
   './index.html',

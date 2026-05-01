@@ -317,10 +317,20 @@
       </div>
       <div class="modal-body">
         <div class="serving-preview" id="servingPreview"></div>
+
+        <div class="serving-ref">
+          <div class="serving-ref-label">1 SERVING</div>
+          <div class="serving-ref-value" id="servingRef">100 G</div>
+        </div>
+
+        <div class="per-serving" id="perServing"></div>
+
         <label class="field">
-          <span class="field-label">GRAMS</span>
-          <input type="number" id="servingGrams" min="1" value="100" />
+          <span class="field-label">SERVINGS</span>
+          <input type="number" id="servingQty" min="0.1" max="50" step="0.5" value="1" inputmode="decimal" />
         </label>
+
+        <div class="serving-total-label">TOTAL</div>
         <div class="serving-macros" id="servingMacros"></div>
         <button class="btn-primary" id="confirmServingBtn">ADD TO LOG</button>
       </div>

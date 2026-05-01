@@ -340,10 +340,13 @@ function renderNutrition() {
       const realIdx = log.length - 1 - idx;
       const el = document.createElement('div');
       el.className = 'food-item';
+      const qtyLabel = f.servings != null
+        ? `${formatQty(f.servings)} × ${escapeHtml(f.servingLabel || (Math.round(f.grams) + ' G'))}`
+        : `${Math.round(f.grams)} G`;
       el.innerHTML = `
         <div class="fi-info">
           <div class="fi-name">${escapeHtml(f.name)}</div>
-          <div class="fi-meta">${f.grams}G · P ${Math.round(f.p)} · C ${Math.round(f.c)} · F ${Math.round(f.f)}</div>
+          <div class="fi-meta">${qtyLabel} · P ${Math.round(f.p)} · C ${Math.round(f.c)} · F ${Math.round(f.f)}</div>
         </div>
         <div class="fi-cal">${Math.round(f.cal)}</div>
         <button class="fi-delete" aria-label="Delete">×</button>
@@ -361,6 +364,11 @@ function renderNutrition() {
 }
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function formatQty(n) {
+  // Render servings count without trailing .0 — "1", "0.5", "1.5", "2".
+  if (n == null || isNaN(n)) return '';
+  return Math.abs(n - Math.round(n)) < 0.001 ? String(Math.round(n)) : String(parseFloat(n.toFixed(2)));
 }
 
 /* ---------- FOOD SEARCH (Open Food Facts) ---------- */
@@ -473,31 +481,65 @@ function renderResults(foods) {
 
 /* ---------- SERVING MODAL ---------- */
 let servingProduct = null;
+let servingInfo = null; // { gramsPerServing, label }
+
+// Determine what "1 serving" is for a USDA food.
+// Returns { gramsPerServing, label } where label is what to show the user.
+//   - Branded foods usually have servingSize (g) + householdServingFullText
+//     ("1 LARGE", "2 TBSP"). Combine them.
+//   - FNDDS / Foundation / SR Legacy entries often lack servingSize on the
+//     search response; fall back to "100 G" since that's USDA's nutrient basis.
+function getServingInfo(food) {
+  const num = v => (typeof v === 'number' && !isNaN(v)) ? v : (v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : null);
+  const ssRaw = num(food.servingSize);
+  const unit = String(food.servingSizeUnit || '').toLowerCase();
+  const isGramUnit = ['g', 'grm', 'gram', 'grams'].includes(unit);
+  const hh = (food.householdServingFullText || '').trim();
+
+  if (ssRaw && isGramUnit) {
+    const g = ssRaw;
+    const gStr = (g % 1 === 0 ? g : g.toFixed(1)) + ' G';
+    const label = hh ? `${hh.toUpperCase()} (${gStr})` : gStr;
+    return { gramsPerServing: g, label };
+  }
+
+  // No usable serving size — default to USDA's per-100g reporting basis.
+  const label = hh ? `${hh.toUpperCase()} · 100 G` : '100 G (USDA REFERENCE)';
+  return { gramsPerServing: 100, label };
+}
+
 function openServing(food) {
   servingProduct = food;
+  servingInfo = getServingInfo(food);
+
   $('#servingTitle').textContent = (food.description || 'FOOD').toUpperCase().slice(0, 28);
   const brandLine = food.dataType === 'Branded'
     ? (food.brandName || food.brandOwner || 'BRANDED')
     : (food.dataType === 'Survey (FNDDS)' ? 'GENERIC' : (food.dataType || 'GENERIC').toUpperCase());
-  const householdHint = food.householdServingFullText ? ` · ${food.householdServingFullText}` : '';
   $('#servingPreview').innerHTML = `
     <div class="sp-name">${escapeHtml(food.description)}</div>
-    <div class="sp-meta">${escapeHtml(brandLine)}${escapeHtml(householdHint)}</div>
+    <div class="sp-meta">${escapeHtml(brandLine)}</div>
   `;
-  // Default the input to the food's labeled serving size if it's in grams,
-  // otherwise default to 100 g (the basis USDA reports nutrients in).
-  let defaultG = 100;
-  if (food.servingSize && typeof food.servingSize === 'number') {
-    const unit = String(food.servingSizeUnit || '').toLowerCase();
-    if (unit === 'g' || unit === 'grm' || unit === 'gram' || unit === 'grams') {
-      defaultG = Math.round(food.servingSize);
-    }
-  }
-  $('#servingGrams').value = defaultG;
+  $('#servingRef').textContent = servingInfo.label;
+
+  // Per-serving macros (one serving = gramsPerServing × per-100g)
+  const per = computeMacrosForGrams(food, servingInfo.gramsPerServing);
+  $('#perServing').innerHTML = `
+    <span class="per-serving-label">PER SERVING:</span>
+    <span class="per-serving-vals">
+      <strong>${Math.round(per.cal)}</strong> CAL ·
+      <strong>${Math.round(per.p)}</strong> P ·
+      <strong>${Math.round(per.c)}</strong> C ·
+      <strong>${Math.round(per.f)}</strong> F
+    </span>
+  `;
+
+  $('#servingQty').value = '1';
   updateServingMacros();
   $('#foodModal').classList.add('hidden');
   $('#servingModal').classList.remove('hidden');
 }
+
 function computeMacrosForGrams(food, grams) {
   const per100 = extractUSDAMacrosPer100g(food);
   const scale = grams / 100;
@@ -508,10 +550,17 @@ function computeMacrosForGrams(food, grams) {
     f: per100.f * scale,
   };
 }
+
+function currentServingQty() {
+  const v = parseFloat($('#servingQty').value);
+  return (isFinite(v) && v > 0) ? v : 0;
+}
+
 function updateServingMacros() {
-  if (!servingProduct) return;
-  const g = parseFloat($('#servingGrams').value) || 0;
-  const m = computeMacrosForGrams(servingProduct, g);
+  if (!servingProduct || !servingInfo) return;
+  const qty = currentServingQty();
+  const totalGrams = qty * servingInfo.gramsPerServing;
+  const m = computeMacrosForGrams(servingProduct, totalGrams);
   $('#servingMacros').innerHTML = `
     <div class="sm-item"><div class="sm-val">${Math.round(m.cal)}</div><div class="sm-lbl">CAL</div></div>
     <div class="sm-item"><div class="sm-val">${Math.round(m.p)}</div><div class="sm-lbl">PROT</div></div>
@@ -519,11 +568,13 @@ function updateServingMacros() {
     <div class="sm-item"><div class="sm-val">${Math.round(m.f)}</div><div class="sm-lbl">FAT</div></div>
   `;
 }
+
 function confirmServing() {
-  if (!servingProduct) return;
-  const g = parseFloat($('#servingGrams').value);
-  if (!g || g <= 0) { toast('ENTER GRAMS'); return; }
-  const m = computeMacrosForGrams(servingProduct, g);
+  if (!servingProduct || !servingInfo) return;
+  const qty = currentServingQty();
+  if (!qty) { toast('ENTER A QUANTITY'); return; }
+  const totalGrams = qty * servingInfo.gramsPerServing;
+  const m = computeMacrosForGrams(servingProduct, totalGrams);
   const day = String(currentDayNum());
   if (!state.nutrition[day]) state.nutrition[day] = [];
   const brand = servingProduct.dataType === 'Branded'
@@ -533,13 +584,16 @@ function confirmServing() {
     id: servingProduct.fdcId || Date.now(),
     name: servingProduct.description,
     brand,
-    grams: g,
+    grams: totalGrams,
+    servings: qty,
+    servingLabel: servingInfo.label,
     cal: m.cal, p: m.p, c: m.c, f: m.f,
     ts: Date.now(),
   });
   save();
   $('#servingModal').classList.add('hidden');
   servingProduct = null;
+  servingInfo = null;
   renderNutrition();
   toast('FOOD LOGGED');
 }
@@ -1004,7 +1058,7 @@ function wireEvents() {
   });
 
   $('#closeServingBtn').addEventListener('click', () => $('#servingModal').classList.add('hidden'));
-  $('#servingGrams').addEventListener('input', updateServingMacros);
+  $('#servingQty').addEventListener('input', updateServingMacros);
   $('#confirmServingBtn').addEventListener('click', confirmServing);
 
   $('#logWeightBtn').addEventListener('click', openWeightLog);
