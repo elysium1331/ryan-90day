@@ -1,4 +1,4 @@
-const CACHE = 'r90d-v3';
+const CACHE = 'r90d-v4';
 const SHELL = [
   './',
   './index.html',
@@ -23,8 +23,8 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Never cache Open Food Facts API calls — always hit network
-  if (url.hostname.includes('openfoodfacts.org')) {
+  // Never cache nutrition API calls — always hit network
+  if (url.hostname.includes('api.nal.usda.gov') || url.hostname.includes('openfoodfacts.org')) {
     return;
   }
   // Google Fonts — cache first, fall back to network

@@ -381,26 +381,24 @@ function wait(ms, signal) {
   });
 }
 
-// Pull kcal/100g out of OFF's inconsistent nutriments. Covers:
-//   energy-kcal_100g, energy-kcal, energy-kj_100g→kcal, energy-kj→kcal, energy_100g (+unit)
-function extractKcalPer100g(n) {
-  if (!n) return null;
-  const num = v => (typeof v === 'number' && !isNaN(v)) ? v : (v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : null);
-  const kcal = num(n['energy-kcal_100g']) ?? num(n['energy-kcal']);
-  if (kcal != null) return kcal;
-  const kj = num(n['energy-kj_100g']) ?? num(n['energy-kj']);
-  if (kj != null) return kj / 4.184;
-  const generic = num(n['energy_100g']) ?? num(n['energy']);
-  if (generic != null) {
-    const unit = (n['energy_unit'] || '').toLowerCase();
-    return unit === 'kcal' ? generic : generic / 4.184;
+// USDA FoodData Central. Public client-side key, rate-limited per key.
+const USDA_API_KEY = 'PCFmUIp9gVct8TiFTEbkX4kDUgb8L4jNav7xSPQN';
+// USDA reports nutrient values per 100 g across all dataTypes (Foundation,
+// SR Legacy, Survey/FNDDS, Branded). nutrientId mapping:
+//   1008 Energy (KCAL)  ·  1003 Protein (G)  ·  1005 Carbohydrate, by difference (G)  ·  1004 Total lipid/fat (G)
+const USDA_NUTRIENT_MAP = { 1008: 'cal', 1003: 'p', 1005: 'c', 1004: 'f' };
+
+function extractUSDAMacrosPer100g(food) {
+  const out = { cal: 0, p: 0, c: 0, f: 0 };
+  for (const n of (food && food.foodNutrients) || []) {
+    const k = USDA_NUTRIENT_MAP[n.nutrientId];
+    if (k && typeof n.value === 'number' && !isNaN(n.value)) out[k] = n.value;
   }
-  return null;
+  return out;
 }
 
 async function fetchWithRetry(url, signal, attempts = 3) {
-  // No custom headers — OFF blocks anything that triggers a CORS preflight.
-  // Plain fetch(url) only sends browser-default headers.
+  // No custom headers — keep it a CORS simple request, no preflight.
   let lastErr = null;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -431,88 +429,83 @@ async function doSearch(q) {
   const signal = searchAbort.signal;
   $('#searchResults').innerHTML = '<div class="search-status">Searching…</div>';
 
-  // Plain URL formats — no extra params that could trigger weird parsing.
-  // cgi first (more results, ranked by OFF), then v2 as CORS-friendly fallback.
-  const query = encodeURIComponent(q);
-  const endpoints = [
-    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${query}&action=process&json=true&page_size=20`,
-    `https://world.openfoodfacts.org/api/v2/search?categories_tags=&search_terms=${query}&page_size=20`,
-  ];
-
-  let lastErr = null;
-  for (const url of endpoints) {
-    try {
-      const data = await fetchWithRetry(url, signal, 3);
-      const products = data.products || data.hits || [];
-      renderResults(products);
-      return;
-    } catch (e) {
-      if (e.name === 'AbortError') return;
-      lastErr = e;
-      console.warn('[search] endpoint failed:', url, e.message);
-    }
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&api_key=${USDA_API_KEY}&pageSize=20`;
+  try {
+    const data = await fetchWithRetry(url, signal, 3);
+    renderResults(data.foods || []);
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    console.error('[search] USDA request failed:', e);
+    $('#searchResults').innerHTML = `<div class="search-status">USDA FoodData Central is unavailable right now.<br/>Try again in a minute. (${escapeHtml(e?.message || 'network error')})</div>`;
   }
-  console.error('[search] all endpoints failed:', lastErr);
-  $('#searchResults').innerHTML = `<div class="search-status">Open Food Facts is unavailable right now.<br/>Try again in a minute. (${escapeHtml(lastErr?.message || 'network error')})</div>`;
 }
 
-function renderResults(products) {
+function renderResults(foods) {
   const resEl = $('#searchResults');
   resEl.innerHTML = '';
-  const enriched = (products || [])
-    .map(p => ({ ...p, _kcal: extractKcalPer100g(p.nutriments) }))
-    .filter(p => p.product_name && typeof p._kcal === 'number' && p._kcal > 0);
+  const enriched = (foods || [])
+    .map(f => ({ ...f, _macros: extractUSDAMacrosPer100g(f) }))
+    .filter(f => f.description && f._macros.cal > 0);
 
   if (!enriched.length) {
-    resEl.innerHTML = '<div class="search-status">No results with nutrition data.<br/>Try a more specific term (e.g. brand name).</div>';
+    resEl.innerHTML = '<div class="search-status">No results with nutrition data.<br/>Try a more specific term.</div>';
     return;
   }
-  enriched.forEach(p => {
-    const kcal = Math.round(p._kcal);
+  enriched.forEach(f => {
+    const kcal = Math.round(f._macros.cal);
+    // Show brand for Branded foods, else dataType (e.g. "Foundation", "FNDDS")
+    const subline = f.dataType === 'Branded'
+      ? (f.brandName || f.brandOwner || 'BRANDED')
+      : (f.dataType === 'Survey (FNDDS)' ? 'GENERIC' : (f.dataType || 'GENERIC').toUpperCase());
     const btn = document.createElement('button');
     btn.className = 'result-item';
     btn.innerHTML = `
       <div class="ri-info">
-        <div class="ri-name">${escapeHtml(p.product_name)}</div>
-        <div class="ri-brand">${escapeHtml(p.brands || 'GENERIC')} · /100G</div>
+        <div class="ri-name">${escapeHtml(f.description)}</div>
+        <div class="ri-brand">${escapeHtml(subline)} · /100G</div>
       </div>
       <div class="ri-cal">${kcal}</div>
     `;
-    btn.addEventListener('click', () => openServing(p));
+    btn.addEventListener('click', () => openServing(f));
     resEl.appendChild(btn);
   });
 }
 
 /* ---------- SERVING MODAL ---------- */
 let servingProduct = null;
-function openServing(p) {
-  servingProduct = p;
-  $('#servingTitle').textContent = (p.product_name || 'FOOD').toUpperCase().slice(0, 28);
+function openServing(food) {
+  servingProduct = food;
+  $('#servingTitle').textContent = (food.description || 'FOOD').toUpperCase().slice(0, 28);
+  const brandLine = food.dataType === 'Branded'
+    ? (food.brandName || food.brandOwner || 'BRANDED')
+    : (food.dataType === 'Survey (FNDDS)' ? 'GENERIC' : (food.dataType || 'GENERIC').toUpperCase());
+  const householdHint = food.householdServingFullText ? ` · ${food.householdServingFullText}` : '';
   $('#servingPreview').innerHTML = `
-    <div class="sp-name">${escapeHtml(p.product_name)}</div>
-    <div class="sp-meta">${escapeHtml(p.brands || 'GENERIC')}</div>
+    <div class="sp-name">${escapeHtml(food.description)}</div>
+    <div class="sp-meta">${escapeHtml(brandLine)}${escapeHtml(householdHint)}</div>
   `;
-  // default to serving size if parseable, else 100g
+  // Default the input to the food's labeled serving size if it's in grams,
+  // otherwise default to 100 g (the basis USDA reports nutrients in).
   let defaultG = 100;
-  if (p.serving_size) {
-    const m = String(p.serving_size).match(/(\d+(\.\d+)?)\s*g/i);
-    if (m) defaultG = parseFloat(m[1]);
+  if (food.servingSize && typeof food.servingSize === 'number') {
+    const unit = String(food.servingSizeUnit || '').toLowerCase();
+    if (unit === 'g' || unit === 'grm' || unit === 'gram' || unit === 'grams') {
+      defaultG = Math.round(food.servingSize);
+    }
   }
   $('#servingGrams').value = defaultG;
   updateServingMacros();
   $('#foodModal').classList.add('hidden');
   $('#servingModal').classList.remove('hidden');
 }
-function computeMacrosForGrams(p, grams) {
-  const n = p.nutriments || {};
+function computeMacrosForGrams(food, grams) {
+  const per100 = extractUSDAMacrosPer100g(food);
   const scale = grams / 100;
-  const kcal100 = extractKcalPer100g(n) ?? 0;
-  const num = v => (typeof v === 'number' ? v : (v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : 0));
   return {
-    cal: kcal100 * scale,
-    p: num(n.proteins_100g) * scale,
-    c: num(n.carbohydrates_100g) * scale,
-    f: num(n.fat_100g) * scale,
+    cal: per100.cal * scale,
+    p: per100.p * scale,
+    c: per100.c * scale,
+    f: per100.f * scale,
   };
 }
 function updateServingMacros() {
@@ -533,10 +526,13 @@ function confirmServing() {
   const m = computeMacrosForGrams(servingProduct, g);
   const day = String(currentDayNum());
   if (!state.nutrition[day]) state.nutrition[day] = [];
+  const brand = servingProduct.dataType === 'Branded'
+    ? (servingProduct.brandName || servingProduct.brandOwner || '')
+    : '';
   state.nutrition[day].push({
-    id: servingProduct.code || Date.now(),
-    name: servingProduct.product_name,
-    brand: servingProduct.brands || '',
+    id: servingProduct.fdcId || Date.now(),
+    name: servingProduct.description,
+    brand,
     grams: g,
     cal: m.cal, p: m.p, c: m.c, f: m.f,
     ts: Date.now(),
