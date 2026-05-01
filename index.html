@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#090909" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>90 DAY — Transformation</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ONBOARDING -->
+  <section id="onboarding" class="screen onboarding hidden">
+    <div class="onboard-inner">
+      <div class="onboard-hero">
+        <div class="onboard-tag">THE PROTOCOL</div>
+        <h1 class="onboard-title">90<br/>DAYS.</h1>
+        <div class="onboard-sub">180 → 170 · 25% → 17%</div>
+      </div>
+      <form id="onboardForm" class="onboard-form">
+        <label class="field">
+          <span class="field-label">START DATE</span>
+          <input type="date" id="startDate" required />
+        </label>
+        <label class="field">
+          <span class="field-label">STARTING WEIGHT (LB)</span>
+          <input type="number" id="startWeight" step="0.1" min="80" max="500" value="180" required />
+        </label>
+        <button type="submit" class="btn-primary">BEGIN</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- APP SHELL -->
+  <main id="app" class="app hidden">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="day-pill" id="dayPill">DAY —</div>
+        <div class="phase-pill" id="phasePill">PHASE —</div>
+      </div>
+      <div class="header-right">
+        <div class="date-label" id="dateLabel"></div>
+      </div>
+    </header>
+
+    <!-- TODAY VIEW -->
+    <section id="view-today" class="view active">
+      <div class="today-hero">
+        <div class="today-split" id="todaySplit">—</div>
+        <div class="today-progress">
+          <div class="progress-ring-wrap">
+            <svg class="progress-ring" viewBox="0 0 120 120">
+              <circle class="pr-bg" cx="60" cy="60" r="52" />
+              <circle class="pr-fg" id="dayRing" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="progress-ring-text">
+              <div class="pr-num" id="dayRingNum">0</div>
+              <div class="pr-lbl">/ 90</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="workout">WORKOUT</button>
+        <button class="tab" data-tab="nutrition">NUTRITION</button>
+        <button class="tab" data-tab="habits">HABITS</button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="tab-panel active" data-panel="workout">
+          <div id="workoutList" class="exercise-list"></div>
+          <div id="workoutEmpty" class="empty-state hidden">
+            <div class="empty-big">REST</div>
+            <div class="empty-sub" id="restSub">Full recovery day.</div>
+          </div>
+          <div id="workoutComplete" class="session-complete hidden">
+            <div class="complete-tag">SESSION</div>
+            <div class="complete-big">COMPLETE</div>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="nutrition">
+          <div class="macro-grid">
+            <div class="macro-card macro-cal">
+              <div class="macro-label">CAL</div>
+              <div class="macro-val" id="calVal">0</div>
+              <div class="macro-target">/ 2150</div>
+              <div class="macro-bar"><div class="macro-bar-fill" id="calBar"></div></div>
+            </div>
+            <div class="macro-card">
+              <div class="macro-label">PROTEIN</div>
+              <div class="macro-val" id="protVal">0</div>
+              <div class="macro-target">/ 170 G</div>
+              <div class="macro-bar"><div class="macro-bar-fill" id="protBar"></div></div>
+            </div>
+            <div class="macro-card">
+              <div class="macro-label">CARBS</div>
+              <div class="macro-val" id="carbVal">0</div>
+              <div class="macro-target">/ 200 G</div>
+              <div class="macro-bar"><div class="macro-bar-fill" id="carbBar"></div></div>
+            </div>
+            <div class="macro-card">
+              <div class="macro-label">FAT</div>
+              <div class="macro-val" id="fatVal">0</div>
+              <div class="macro-target">/ 65 G</div>
+              <div class="macro-bar"><div class="macro-bar-fill" id="fatBar"></div></div>
+            </div>
+          </div>
+
+          <button class="btn-ghost btn-add-food" id="openSearchBtn">+ ADD FOOD</button>
+
+          <div class="section-header">TODAY'S LOG</div>
+          <div id="foodLog" class="food-log"></div>
+          <div id="foodLogEmpty" class="food-log-empty">No food logged yet.</div>
+        </div>
+
+        <div class="tab-panel" data-panel="habits">
+          <div class="habit-hero">
+            <div class="habit-hero-left">
+              <div class="habit-hero-label">DAILY COMPLETION</div>
+              <div class="habit-hero-count"><span id="habitCompleted">0</span><span class="habit-hero-total">/4</span></div>
+            </div>
+            <div class="habit-hero-bar"><div class="habit-hero-fill" id="habitHeroFill"></div></div>
+          </div>
+
+          <div class="habit-list">
+            <button class="habit-card" data-habit="walk" id="habitWalk">
+              <div class="habit-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg></div>
+              <div class="habit-info">
+                <div class="habit-name">MORNING WALK</div>
+                <div class="habit-sub">30+ minutes</div>
+              </div>
+            </button>
+
+            <div class="habit-card habit-steps" id="habitStepsCard">
+              <div class="habit-check habit-dot" id="stepsDot"></div>
+              <div class="habit-info">
+                <div class="habit-name">STEPS</div>
+                <div class="habit-sub" id="stepsSub">Target 8,000–10,000</div>
+              </div>
+              <input type="number" id="stepsInput" class="steps-input" min="0" max="100000" step="100" placeholder="0" inputmode="numeric" />
+            </div>
+
+            <button class="habit-card" data-habit="water" id="habitWater">
+              <div class="habit-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg></div>
+              <div class="habit-info">
+                <div class="habit-name">1 GALLON WATER</div>
+                <div class="habit-sub">~128 oz · stay ahead of it</div>
+              </div>
+            </button>
+
+            <button class="habit-card" data-habit="supps" id="habitSupps">
+              <div class="habit-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg></div>
+              <div class="habit-info">
+                <div class="habit-name">SUPPLEMENTS</div>
+                <div class="habit-sub">Full daily stack</div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROGRESS VIEW -->
+    <section id="view-progress" class="view">
+      <h2 class="view-title">PROGRESS</h2>
+
+      <div class="weight-grid">
+        <div class="weight-card">
+          <div class="wc-label">DAY 1</div>
+          <div class="wc-val" id="baselineWeight">—</div>
+          <div class="wc-unit">LB</div>
+        </div>
+        <div class="weight-card weight-card-current">
+          <div class="wc-label">CURRENT</div>
+          <div class="wc-val" id="currentWeight">—</div>
+          <div class="wc-unit">LB</div>
+        </div>
+        <div class="weight-card">
+          <div class="wc-label">CHANGE</div>
+          <div class="wc-val" id="weightChange">—</div>
+          <div class="wc-unit">LB</div>
+        </div>
+        <div class="weight-card">
+          <div class="wc-label">7-DAY AVG</div>
+          <div class="wc-val" id="weightAvg">—</div>
+          <div class="wc-unit">LB</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">WEIGHT OVER TIME</div>
+          <div class="chart-sub" id="chartSub">— entries</div>
+        </div>
+        <div id="chartWrap" class="chart-wrap"></div>
+      </div>
+
+      <button class="btn-primary" id="logWeightBtn">LOG WEIGHT</button>
+
+      <div class="section-header">HISTORY</div>
+      <div id="weightList" class="weight-list"></div>
+    </section>
+
+    <!-- MEAL PLAN VIEW -->
+    <section id="view-meals" class="view">
+      <h2 class="view-title">MEAL PLAN</h2>
+      <div class="meals-hero">
+        <div class="meals-hero-left">
+          <div class="meals-hero-label">TODAY</div>
+          <div class="meals-hero-count"><span id="mealsDoneCount">0</span><span class="meals-hero-total">/5 DONE</span></div>
+        </div>
+        <div class="meals-hero-bar"><div class="meals-hero-fill" id="mealsHeroFill"></div></div>
+      </div>
+      <div id="mealsList" class="meals-list"></div>
+      <div class="meals-footnote">Same template every day. Choose what you're in the mood for from each card's options, then log it in Nutrition.</div>
+    </section>
+
+    <!-- DASHBOARD VIEW -->
+    <section id="view-dash" class="view">
+      <h2 class="view-title">DASHBOARD</h2>
+
+      <div class="phase-card" id="phaseCard">
+        <div class="phase-tag" id="phaseTag">PHASE 1</div>
+        <div class="phase-name" id="phaseName">FOUNDATION</div>
+        <div class="phase-desc" id="phaseDesc">—</div>
+        <div class="phase-progress">
+          <div class="phase-progress-bar"><div class="phase-progress-fill" id="phaseFill"></div></div>
+          <div class="phase-progress-label" id="phaseProgLbl">Week — of —</div>
+        </div>
+      </div>
+
+      <div class="section-header">COACHING</div>
+      <div id="suggestions" class="suggestions"></div>
+
+      <div class="section-header">THIS WEEK</div>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="sc-label">WORKOUTS</div>
+          <div class="sc-val" id="sumWorkouts">0<span class="sc-sub">/5</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">AVG PROTEIN</div>
+          <div class="sc-val" id="sumProtein">—<span class="sc-sub">G</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">AVG CAL</div>
+          <div class="sc-val" id="sumCal">—</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">WEIGHT Δ</div>
+          <div class="sc-val" id="sumWeight">—<span class="sc-sub">LB</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">HABITS</div>
+          <div class="sc-val" id="sumHabits">—<span class="sc-sub">%</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">AVG STEPS</div>
+          <div class="sc-val" id="sumSteps">—</div>
+        </div>
+      </div>
+
+      <button class="btn-ghost btn-reset" id="resetBtn">RESET ALL DATA</button>
+    </section>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-view="today">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12L12 3l9 9"/><path d="M5 10v10h14V10"/></svg>
+        <span>TODAY</span>
+      </button>
+      <button class="nav-btn" data-view="meals">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v8a2 2 0 0 0 2 2v10"/><path d="M10 2v8a2 2 0 0 1-2 2"/><path d="M16 22V3c-1.5 0-3 2-3 5s1.5 5 3 5"/></svg>
+        <span>MEALS</span>
+      </button>
+      <button class="nav-btn" data-view="progress">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+        <span>PROGRESS</span>
+      </button>
+      <button class="nav-btn" data-view="dash">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span>COACH</span>
+      </button>
+    </nav>
+  </main>
+
+  <!-- FOOD SEARCH MODAL -->
+  <div id="foodModal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title">ADD FOOD</div>
+        <button class="modal-close" id="closeSearchBtn">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="foodSearch" class="search-input" placeholder="search foods..." autocomplete="off" />
+        <div id="searchResults" class="search-results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVING SIZE MODAL -->
+  <div id="servingModal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title" id="servingTitle">SERVING</div>
+        <button class="modal-close" id="closeServingBtn">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="serving-preview" id="servingPreview"></div>
+        <label class="field">
+          <span class="field-label">GRAMS</span>
+          <input type="number" id="servingGrams" min="1" value="100" />
+        </label>
+        <div class="serving-macros" id="servingMacros"></div>
+        <button class="btn-primary" id="confirmServingBtn">ADD TO LOG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEIGHT LOG MODAL -->
+  <div id="weightModal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title">LOG WEIGHT</div>
+        <button class="modal-close" id="closeWeightBtn">×</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span class="field-label">WEIGHT (LB)</span>
+          <input type="number" id="weightInput" step="0.1" min="80" max="500" />
+        </label>
+        <button class="btn-primary" id="confirmWeightBtn">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SET LOG MODAL -->
+  <div id="setModal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title" id="setModalTitle">LOG SET</div>
+        <button class="modal-close" id="closeSetBtn">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="set-sub" id="setModalSub"></div>
+        <div class="set-grid">
+          <label class="field">
+            <span class="field-label">WEIGHT</span>
+            <input type="number" id="setWeight" step="0.5" min="0" />
+          </label>
+          <label class="field">
+            <span class="field-label">REPS</span>
+            <input type="number" id="setReps" step="1" min="0" />
+          </label>
+        </div>
+        <button class="btn-primary" id="confirmSetBtn">LOG SET</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
